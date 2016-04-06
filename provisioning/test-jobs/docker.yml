@@ -1,0 +1,71 @@
+- defaults:
+    name: gpii-universal
+    git_app_repo: https://github.com/GPII/universal.git
+    git_app_branch: master
+    git_docker_repo: https://github.com/GPII/universal.git
+    git_docker_branch: master
+    nodejs_version: 0.10.43
+    docker_username: gpii
+    docker_image: universal
+    docker_tag: latest
+    build_timeout: 30
+    email_recipient: alfredo@raisingthefloor.org
+    jenkins_node: slave1
+
+- project:
+    name: gpii-universal-master
+    jenkins_tag: master
+    git_app_branch: master
+    git_docker_branch: master
+    nodejs_version: 0.10.43
+    docker_tag: latest
+    jobs:
+      - 'docker-gpii-universal'
+
+- job-template:
+    defaults: gpii-universal
+    name: 'docker-gpii-universal'
+    description: 'Builds, tests and pushes the GPII Universal Docker image'
+    project-type: freestyle
+    concurrent: false
+    node: '{jenkins_node}'
+    wrappers:
+      - timeout:
+          timeout: '{build_timeout}'
+          abort: yes
+    publishers:
+      - email:
+            recipients: '{email_recipient}'
+    scm:
+      - git:
+          skip-tag: true
+          shallow-clone: true
+          basedir: docker
+          url: '{git_docker_repo}'
+          branches:
+            - '{git_docker_branch}'
+      - git:
+          skip-tag: true
+          shallow-clone: true
+          basedir: app
+          url: '{git_app_repo}'
+          branches:
+            - '{git_app_branch}'
+    triggers:
+      - github
+    builders:
+      - docker-builder:
+          registry: "https://registry:5000"
+          registry_credentials: "docker-registry-credentials"
+          repo-name: "gpii/universal"
+          no-cache: true
+          force-pull: true
+          skip-build: false
+          skip-decorate: false
+          build-context: "docker"
+          repo-tag: '{git_docker_branch}'
+          skip-push: true
+          create-fingerprint: true
+          skip-tag-latest: false
+          force-tag: true
+

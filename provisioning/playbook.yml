@@ -1,0 +1,109 @@
+---
+
+- hosts: all
+  become: true
+  pre_tasks:
+    - name: Set hostname
+      hostname:
+        name: '{{ inventory_hostname_short }}'
+
+    - name: Install epel-release
+      yum: name=epel-release state=latest
+
+    - name: Install required packages
+      yum: name={{item}} state=latest
+      with_items:
+        - iptables-services
+        - docker-python
+        - net-tools
+        - libsemanage-python
+        - python-httplib2
+        - git
+
+    - name: Build hosts file
+      lineinfile:
+        dest: /etc/hosts
+        line: "{{ item[1] }} {{ item[0] }}"
+        state: present
+      with_items:
+        - [['master1' , '10.0.0.10'],
+           ['slave1'  , '10.0.0.20'],
+           ['slave2'  , '10.0.0.30'],
+           ['registry', '10.0.0.10']]
+
+- hosts: master
+  become: true
+  vars:
+    - jenkins_node_name: "{{ ansible_nodename }}"
+    - jenkins_admins:
+      - ["admin", "root"]
+    - jenkins_master_credentials:
+      - id: 'docker-registry-credentials'
+        description: 'Credentials to connect to Docker Registry'
+        username: 'admin'
+        password: 'root'
+    - docker_admin_users: ["vagrant"]
+    - nginx_reverse_endpoints:
+      - name: gpii-qi
+        ssl_enabled: no
+        domains:
+          - "_"
+        backends:
+          - 127.0.0.1:8080
+
+  roles:
+    - facts
+    - jenkins-master
+    - nginx-common
+    - nginx-reverse
+    - {role: docker, tags: [ 'install', 'configure', 'deploy' ]}
+    - docker-registry
+
+- hosts: slaves
+  become: true
+  vars:
+    - jenkins_node_name: "{{ ansible_hostname }}"
+    - jenkins_master_host: "master1"
+    - jenkins_master_port: 80
+    - jenkins_node_description: "Description {{ ansible_hostname }}"
+    - jenkins_node_fspath: "/var/jenkins"
+    - jenkins_node_executors: "3"
+    - jenkins_node_labels:
+      - centos7
+      - linux
+    - jenkins_admin_credentials: ["admin", "root"]
+    - docker_admin_users: ["vagrant", "jenkins"]
+
+  roles:
+    - facts
+    - jenkins-node
+    - {role: docker, tags: [ 'install', 'configure', 'deploy' ]}
+
+  tasks:
+    - name: copy registry certificates
+      copy:
+        src: "certs/pki/ca.crt"
+        dest: "{{ item }}"
+      with_items:
+        - "/etc/docker/certs.d/registry-ca.crt"
+        - "/etc/pki/ca-trust/source/anchors/registry-ca.crt"
+      notify: restart docker
+
+    - name: update certs
+      command: update-ca-trust
+
+  handlers:
+    - name: restart docker
+      service: name=docker state=restarted
+
+  post_tasks:
+    - name: Restart jenkins_node
+      service: name=jenkins-node state=restarted
+
+- hosts: master
+  become: true
+  post_tasks:
+    - name: Create Test job
+      shell: /usr/bin/jenkins-jobs --conf /var/lib/jenkins/jenkins_jobs.ini update /home/vagrant/sync/provisioning/test-jobs/docker.yml
+      become: true
+

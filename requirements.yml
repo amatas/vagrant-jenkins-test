@@ -1,0 +1,24 @@
+---
+
+- src: https://github.com/idi-ops/ansible-facts
+  name: facts
+
+- src: https://github.com/amatas/ansible-jenkins-master
+  name: jenkins-master
+
+- src: https://github.com/idi-ops/ansible-nginx-common
+  name: nginx-common
+
+- src: https://github.com/idi-ops/ansible-nginx-reverse
+  name: nginx-reverse
+
+- src: https://github.com/amatas/ansible-jenkins-node
+  name: jenkins-node
+
+- src: https://github.com/idi-ops/ansible-docker
+  name: docker
+
+- src: https://github.com/amatas/ansible-docker-registry
+  name: docker-registry
+ 
+      
